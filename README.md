@@ -1,5 +1,6 @@
 This is a minimal example to reproduce a bug in the `androidx.camera.video`
-package when the video is being saved into a [proxy file descriptor](https://developer.android.com/reference/android/os/storage/StorageManager#openProxyFileDescriptor(int,%20android.os.ProxyFileDescriptorCallback,%20android.os.Handler)).
+package when the video is being saved into a [proxy file descriptor](https://developer.android.com/reference/android/os/storage/StorageManager#openProxyFileDescriptor(int,%20android.os.ProxyFileDescriptorCallback,%20android.os.Handler)). Also reproduces similar 
+bug in `MediaRecorder` when the recording is being saved into a proxy file descriptor.  
 
-A real-world situation where this bug can happen is trying to save a video into a file descriptor
+A real-world situation where this bug can happen is trying to save a video/audio into a file descriptor
 obtained with [`ContentResolver.openFileDescriptor`](https://developer.android.com/reference/android/content/ContentResolver#openFileDescriptor(android.net.Uri,%20java.lang.String,%20android.os.CancellationSignal)) where the corresponding [`ContentProvider`](https://developer.android.com/reference/android/content/ContentProvider) uses proxy file descriptors in the [`openFile`](https://developer.android.com/reference/android/content/ContentProvider#openFile(android.net.Uri,%20java.lang.String)) method.
