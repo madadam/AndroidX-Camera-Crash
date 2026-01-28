@@ -1,6 +1,8 @@
 package org.example.cameracrash
 
 import android.Manifest
+import android.content.pm.PackageManager
+import android.media.MediaRecorder
 import android.os.Bundle
 import android.os.Handler
 import android.os.HandlerThread
@@ -10,17 +12,6 @@ import android.os.storage.StorageManager
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.FabPosition
-import androidx.compose.material3.Icon
-import androidx.compose.material3.LargeFloatingActionButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.Preview
@@ -33,6 +24,17 @@ import androidx.camera.video.Recording
 import androidx.camera.video.VideoCapture
 import androidx.camera.video.VideoRecordEvent
 import androidx.camera.view.PreviewView
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material3.FabPosition
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
 
 class MainActivity : ComponentActivity() {
     companion object {
@@ -43,12 +45,14 @@ class MainActivity : ComponentActivity() {
 
     private var videoCapture: VideoCapture<Recorder>? = null
     private var recording: Recording? = null
+    private var recorder: MediaRecorder? = null
 
     private val requestPermissions = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         if (permissions[Manifest.permission.CAMERA] == true &&
-            permissions[Manifest.permission.RECORD_AUDIO] == true) {
+            permissions[Manifest.permission.RECORD_AUDIO] == true
+        ) {
             startCamera()
         }
     }
@@ -61,27 +65,30 @@ class MainActivity : ComponentActivity() {
         setContent {
             Scaffold(
                 modifier = Modifier.fillMaxSize(),
-                floatingActionButton = {
-                    LargeFloatingActionButton(
-                        onClick = { toggleRecording() },
-                        shape = CircleShape,
-                    ) {
-                        Icon(Icons.Filled.Add, "toggle recording")
-                    }
-                },
                 floatingActionButtonPosition = FabPosition.Center
             ) { innerPadding ->
-                AndroidView(
-                    factory = { previewView },
-                    modifier = Modifier.padding(innerPadding)
-                )
+                Column(modifier = Modifier.padding(innerPadding)) {
+                    Row() {
+                        Button(onClick = { toggleVideoRecording() }) {
+                            Text("Crash camera")
+                        }
+                        Button(onClick = { toggleAudioRecording() }) {
+                            Text("Crash audio")
+                        }
+                    }
+                    AndroidView(
+                        factory = { previewView },
+                    )
+                }
             }
         }
 
-        requestPermissions.launch(arrayOf(
-            Manifest.permission.CAMERA,
-            Manifest.permission.RECORD_AUDIO
-        ))
+        requestPermissions.launch(
+            arrayOf(
+                Manifest.permission.CAMERA,
+                Manifest.permission.RECORD_AUDIO
+            )
+        )
     }
 
     private fun startCamera() {
@@ -112,22 +119,23 @@ class MainActivity : ComponentActivity() {
         }, mainExecutor)
     }
 
-    private fun toggleRecording() {
+    private fun toggleVideoRecording() {
+        if (ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.RECORD_AUDIO
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+
         if (recording != null) {
             recording?.stop()
             recording = null
             return
         }
 
-        val storage = getSystemService(STORAGE_SERVICE) as StorageManager
-        val handler = Handler(HandlerThread("proxy file descriptor").apply { start() }.looper)
 
-        val pfd = storage.openProxyFileDescriptor(
-            ParcelFileDescriptor.MODE_WRITE_ONLY,
-            ProxyCallback(),
-            handler,
-        )
-
+        val pfd = createProxyFileDescriptor()
         val output = FileDescriptorOutputOptions.Builder(pfd).build()
 
         val videoCapture = requireNotNull(this.videoCapture)
@@ -140,6 +148,7 @@ class MainActivity : ComponentActivity() {
                     is VideoRecordEvent.Start -> {
                         Log.i(TAG, "recording started")
                     }
+
                     is VideoRecordEvent.Finalize -> {
                         if (event.hasError()) {
                             Log.e(TAG, "recording failed: ${event.error}", event.cause)
@@ -149,6 +158,36 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+    }
+
+    private fun toggleAudioRecording() {
+        val recorder = this.recorder
+        if (recorder != null) {
+            recorder.stop()
+            this.recorder = null
+        } else {
+            val pfd = createProxyFileDescriptor()
+
+            this.recorder = MediaRecorder(this).apply {
+                setAudioSource(MediaRecorder.AudioSource.MIC)
+                setOutputFormat(MediaRecorder.OutputFormat.OGG)
+                setAudioEncoder(MediaRecorder.AudioEncoder.OPUS)
+                setOutputFile(pfd.fileDescriptor)
+                prepare()
+                start()
+            }
+        }
+    }
+
+    private val handler = Handler(HandlerThread("proxy file descriptor").apply { start() }.looper)
+    private fun createProxyFileDescriptor(): ParcelFileDescriptor {
+        val storage = getSystemService(STORAGE_SERVICE) as StorageManager
+
+        return storage.openProxyFileDescriptor(
+            ParcelFileDescriptor.MODE_WRITE_ONLY,
+            ProxyCallback(),
+            handler,
+        )
     }
 }
 
@@ -180,4 +219,3 @@ private class ProxyCallback : ProxyFileDescriptorCallback() {
         Log.d(TAG, "onRelease")
     }
 }
-

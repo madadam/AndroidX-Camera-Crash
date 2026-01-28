@@ -12,8 +12,8 @@ android {
 
         applicationId = packageName
         namespace = packageName
-        minSdk = 24
-        targetSdk = 35
+        minSdk = 31
+        targetSdk = 36
         versionCode = 1
         versionName = "0.1"
     }
@@ -30,6 +30,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    kotlin {
+         jvmToolchain(17)
+    }
+
     buildFeatures {
         compose = true
     }
@@ -37,6 +41,7 @@ android {
 
 dependencies {
     val cameraVersion = "1.5.2"
+    // val cameraVersion = "1.6.0-alpha02"
 
     implementation("androidx.activity:activity-compose:1.12.2")
     implementation(platform("androidx.compose:compose-bom:2025.12.01"))
